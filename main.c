@@ -306,7 +306,7 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				//&GetProcAddress
 
 			}
-			if (isBP(&DE, &GetProcAddress))
+			if (isBP(&DE, (DWORD)GetProcAddress))
 			{
 				ctx.ContextFlags = CONTEXT_FULL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
