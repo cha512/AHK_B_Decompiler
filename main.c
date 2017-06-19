@@ -1,4 +1,3 @@
-//-L "C:\Program Files (x86)\Dev-Cpp\MinGW64\x86_64-w64-mingw32\lib32" -l comdlg32
 #include<stdio.h>
 #include<windows.h>
 
@@ -15,8 +14,8 @@ BYTE MOV = 0x8B;
 BYTE Sig1[] = { 0x8B, 0x45, 0x64, 0xFF, 0x05 };
 BYTE Sig2[] = { 0x8D, 0x86, 0x10, 0x01, 0x00, 0x00 };
 BYTE UPX_Sig[] = { 0x83, 0xEC, 0x80, 0xE9 };
-BYTE MoleBoxSig[] = {0x55, 0x8b, 0xec};
-BYTE EP_Sig[] = {0x60,0xEB};
+BYTE MoleBoxSig[] = { 0x55, 0x8b, 0xec };
+BYTE EP_Sig[] = { 0x60,0xEB };
 BOOL isMolebox = FALSE;
 
 VOID Err_Chk(char Msg[], DWORD Err_Code)
@@ -53,7 +52,7 @@ DWORD RAW2RVA(DWORD dwRAW, PIMAGE_NT_HEADERS pNtHeader, PIMAGE_SECTION_HEADER pS
 
 BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtHeader, PIMAGE_SECTION_HEADER pSecHeader, char sOutput[])
 {
-	
+
 	//MoleBox Routine : 
 	FILE *fp;
 	BYTE UnpackSig1[] = { 0xFF, 0x35 };
@@ -89,13 +88,13 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 	RVA += pNtHeader->OptionalHeader.ImageBase;
 
 
-	for (i = EP_RAW; i<EP_RAW + 200; i++) //대충.. 100정도면 문제 없으려나. 문제있네. 
+	for (i = EP_RAW; i < EP_RAW + 200; i++) //????.. 100?????? ???? ????????. ???????. 
 	{
 		if (memcmp(fs + i, UnpackSig1, sizeof(UnpackSig1)) == 0)
 			break;
 	}
 	EP_RAW = i;
-	for (i = EP_RAW; i<EP_RAW + 50; i++)
+	for (i = EP_RAW; i < EP_RAW + 50; i++)
 	{
 		if (memcmp(fs + i, UnpackSig2, sizeof(UnpackSig2)) == 0)
 			break;
@@ -146,27 +145,27 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 			{
 				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(RVA2), (LPVOID)&Buffer2, 0xFFFF, NULL);
 				Err_Chk("ReadProcessMemory", ret);
-				for (i = 0; i<0xFFFF - sizeof(UnpackSig3); i++)
+				for (i = 0; i < 0xFFFF - sizeof(UnpackSig3); i++)
 				{
 					if (memcmp(Buffer2 + i, UnpackSig3, sizeof(UnpackSig3)) == 0)
 						break;
 				}
-				for (i; i<0xFFFF - sizeof(UnpackSig2); i++)
+				for (i; i < 0xFFFF - sizeof(UnpackSig2); i++)
 				{
 					if (memcmp(Buffer2 + i, UnpackSig2, sizeof(UnpackSig2)) == 0)
 						break;
 				}
-				for (i; i<0xFFFF - sizeof(UnpackSig3); i++)
+				for (i; i < 0xFFFF - sizeof(UnpackSig3); i++)
 				{
 					if (memcmp(Buffer2 + i, UnpackSig3, sizeof(UnpackSig3)) == 0)
 						break;
 				}
-				for (i; i<0xFFFF - sizeof(UnpackSig2); i++)
+				for (i; i < 0xFFFF - sizeof(UnpackSig2); i++)
 				{
 					if (memcmp(Buffer2 + i, UnpackSig2, sizeof(UnpackSig2)) == 0)
 						break;
 				}
-				for (i; i<0xFFFF - sizeof(UnpackSig3); i++)
+				for (i; i < 0xFFFF - sizeof(UnpackSig3); i++)
 				{
 					if (memcmp(Buffer2 + i, UnpackSig3, sizeof(UnpackSig3)) == 0)
 					{
@@ -208,7 +207,7 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 			{
 				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(RVA4), (LPVOID)&Buffer2, 0xFFFF, NULL);
 				Err_Chk("ReadProcessMemory", ret);
-				for (i = 0; i<0xFFFF - sizeof(UnpackSig4); i++)
+				for (i = 0; i < 0xFFFF - sizeof(UnpackSig4); i++)
 				{
 					if (memcmp(Buffer2 + i, UnpackSig4, sizeof(UnpackSig4)) == 0)
 					{
@@ -252,7 +251,7 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				Err_Chk("GetThreadContext", ret);
 				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Eax), (LPVOID)&Buffer3, 0x100, NULL);
 				Err_Chk("ReadProcessMemory", ret);
-				for (i = 0; i<0x100 - sizeof(UnpackSig4); i++)
+				for (i = 0; i < 0x100 - sizeof(UnpackSig4); i++)
 				{
 					if (memcmp(Buffer3 + i, UnpackSig4, sizeof(UnpackSig4)) == 0)
 					{
@@ -318,12 +317,12 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(RetAddr), (LPVOID)&Buffer3, 0x100, NULL);
 				Err_Chk("ReadProcessMemory", ret);
 
-				for (i = 0; i<0x100 - sizeof(POPAD_Sig); i++)
+				for (i = 0; i < 0x100 - sizeof(POPAD_Sig); i++)
 				{
 					if (memcmp(Buffer3 + i, POPAD_Sig, sizeof(POPAD_Sig)) == 0)
 						break;
 				}
-				for (i; i<0x100 - sizeof(JMP_Sig); i++)
+				for (i; i < 0x100 - sizeof(JMP_Sig); i++)
 				{
 					if (memcmp(Buffer3 + i, JMP_Sig, sizeof(JMP_Sig)) == 0)
 						break;
@@ -347,7 +346,7 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 			{
 				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)0x448000, (LPVOID)&Buffer5, 0xFFFF, NULL);
 				Err_Chk("ReadProcessMemory", ret);
-				for (i = 0; i<0xFFFF - 6; i++)
+				for (i = 0; i < 0xFFFF - 6; i++)
 				{
 					if (memcmp(Buffer5 + i, Sig1, sizeof(Sig1)) == 0)
 					{
@@ -481,7 +480,7 @@ BOOL Decompile(char sInput[], char sOutput[], DWORD JMP_RVA)
 				{
 					ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)0x448000, (LPVOID)&Buffer, 0xFFFF, NULL);
 					Err_Chk("ReadProcessMemory", ret);
-					for (i = 0; i<0xFFFF - 6; i++)
+					for (i = 0; i < 0xFFFF - 6; i++)
 					{
 						if (memcmp(Buffer + i, Sig1, sizeof(Sig1)) == 0)
 						{
@@ -576,7 +575,7 @@ BOOL Decompile(char sInput[], char sOutput[], DWORD JMP_RVA)
 int main(int argc, char* argv[])
 {
 	FILE *fp;
-	OPENFILENAME OFN;
+	OPENFILENAMEA OFN;
 	IMAGE_DOS_HEADER IDH;
 	IMAGE_NT_HEADERS INH;
 	IMAGE_SECTION_HEADER ISH;
@@ -594,15 +593,14 @@ int main(int argc, char* argv[])
 		memset(&OFN, 0, sizeof(OPENFILENAME));
 		OFN.lStructSize = sizeof(OPENFILENAME);
 		OFN.hwndOwner = 0;
+
 		OFN.lpstrFilter = "Exe File(*.exe)\0*.exe\0";
 		OFN.lpstrFile = lpstrFile;
 		OFN.nMaxFile = 256;
-		if (GetOpenFileName(&OFN) != 0)
+		if (GetOpenFileNameA(&OFN) != 0)
 		{
-			PATH = (char *)malloc(strlen(OFN.lpstrFile));
-			memset(PATH, 0, strlen(OFN.lpstrFile));
-			CopyMemory(PATH, OFN.lpstrFile, strlen(OFN.lpstrFile));
-			printf("%s\n", OFN.lpstrFile);
+			PATH = lpstrFile;
+			printf("%s\n", PATH);
 		}
 		else return EXIT_SUCCESS;
 	}
@@ -635,7 +633,7 @@ int main(int argc, char* argv[])
 	Tmp = (BYTE *)malloc(sizeof(IMAGE_SECTION_HEADER));
 	while (chk)
 	{
-		fseek(fp, IDH.e_lfanew + sizeof(IMAGE_NT_HEADERS)+(sizeof(IMAGE_SECTION_HEADER)* i), SEEK_SET);
+		fseek(fp, IDH.e_lfanew + sizeof(IMAGE_NT_HEADERS) + (sizeof(IMAGE_SECTION_HEADER)* i), SEEK_SET);
 		i++;
 		fread(Tmp, 1, sizeof(IMAGE_SECTION_HEADER), fp);
 		CopyMemory(&ISH, Tmp, sizeof(IMAGE_SECTION_HEADER));
@@ -656,7 +654,7 @@ int main(int argc, char* argv[])
 	fclose(fp);
 	printf("RAW : %X\nRAWSize : %X\nRVA : %X\nRVASize : %X\nEP_RAW : %X\n", RAW, RAWSize, RVA, RVASize, EP_RAW);
 
-	if(memcmp(fs+EP_RAW,MoleBoxSig,sizeof(MoleBoxSig)) == 0)
+	if (memcmp(fs + EP_RAW, MoleBoxSig, sizeof(MoleBoxSig)) == 0)
 	{
 		printf("Are You Convinced That This File is Packed by Molebox? (Y/N) ");
 		scanf("%c", &Input);
@@ -670,7 +668,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	else if (memcmp(fs+EP_RAW,EP_Sig,sizeof(EP_Sig)) == 0) //memcmp...
+	else if (memcmp(fs + EP_RAW, EP_Sig, sizeof(EP_Sig)) == 0) //memcmp...
 	{
 		printf("Fail!\n");
 		system("pause");
@@ -682,12 +680,12 @@ int main(int argc, char* argv[])
 
 	if (isMolebox)
 	{
-		if(MoleBoxUnpack(PATH, fs, EP_RAW, &INH, &ISH, Path)) printf("Successfully Write File.\n");
+		if (MoleBoxUnpack(PATH, fs, EP_RAW, &INH, &ISH, (char *)Path)) printf("Successfully Write File.\n");
 		else printf("Fail!!!\n");
 	}
 	else
 	{
-		for (i = EP_RAW; i<Len; i++)
+		for (i = EP_RAW; i < Len; i++)
 		{
 			if (memcmp(fs + i, UPX_Sig, sizeof(UPX_Sig)) == 0)
 			{
@@ -707,3 +705,4 @@ int main(int argc, char* argv[])
 	system("pause");
 	return EXIT_SUCCESS;
 }
+
