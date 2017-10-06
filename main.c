@@ -1,6 +1,9 @@
 #include<stdio.h>
 #include<windows.h>
 
+#pragma comment(lib, "comdlg32.lib")
+//-L "C:\Program Files (x86)\Dev-Cpp\MinGW64\x86_64-w64-mingw32\lib32" -l comdlg32
+
 BYTE INT3 = 0xCC;
 BYTE JMP = 0xE9;
 BYTE LEA = 0x8D;
@@ -11,8 +14,9 @@ BYTE PUSH = 0x68;
 BYTE PUSHAD = 0x60;
 BYTE MOV = 0x8B;
 
-BYTE Sig1[] = { 0x8B, 0x45, 0x64, 0xFF, 0x05 };
-BYTE Sig2[] = { 0x8D, 0x86, 0x10, 0x01, 0x00, 0x00 };
+BYTE ScriptSig[] = { 0x8B, 0x45, 0x64, 0xFF, 0x05 };
+BYTE LiteScriptSig[] = { 0x8B, 0x45, 0x68, 0xFF, 0x05 };
+BYTE PWSig[] = { 0x8D, 0x86, 0x10, 0x01, 0x00, 0x00 };
 BYTE UPX_Sig[] = { 0x83, 0xEC, 0x80, 0xE9 };
 BYTE MoleBoxSig[] = { 0x55, 0x8b, 0xec };
 BYTE EP_Sig[] = { 0x60,0xEB };
@@ -66,13 +70,15 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 	BOOL chk = FALSE;
 	BYTE NOW = 0xFF, *PW;
 
-	DWORD Buffer, RetAddr;
-	DWORD BP_RVA = 0, BP_RVA2 = 0, ScriptSize, ScriptAddress;
-
+	DWORD Temp, RetAddr;
+	DWORD BP_RVA[2] = { 0, };
+	DWORD ScriptSize, ScriptAddress;
 	DWORD i, ret;
-	DWORD RVA, RVA2, RVA3, RVA4, RVA5, RVA6, RVA7, RVA8, JMP_RVA;
-	BYTE Buffer2[0xFFFF + 1], Buffer3[0x100], *Buffer4, Buffer5[0xFFFF + 1];
-
+	DWORD RVA[8] = { 0, };
+	DWORD JMP_RVA,OEP_RVA, Relative_Addr;
+	BYTE Buffer2[0xFFFF + 1], Buffer3[0x100], Buffer5[0xFFFF + 1];
+	BYTE *RealScript;
+	DWORD AddOffset[2] = { 0, };
 	PROCESS_INFORMATION processinfo;
 	STARTUPINFO startupinfo;
 	DEBUG_EVENT DE;
@@ -83,9 +89,6 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 	memset(&processinfo, 0, sizeof(PROCESS_INFORMATION));
 	memset(&startupinfo, 0, sizeof(STARTUPINFO));
 	memset(&DE, 0, sizeof(DEBUG_EVENT));
-
-	RVA = RAW2RVA(EP_RAW, pNtHeader, pSecHeader);
-	RVA += pNtHeader->OptionalHeader.ImageBase;
 
 
 	for (i = EP_RAW; i < EP_RAW + 200; i++) //????.. 100?????? ???? ????????. ???????. 
@@ -103,16 +106,16 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 
 
 
-	RVA = RAW2RVA(EP_RAW, pNtHeader, pSecHeader);
-	RVA += pNtHeader->OptionalHeader.ImageBase;
+	RVA[0] = RAW2RVA(EP_RAW, pNtHeader, pSecHeader);
+	RVA[0] += pNtHeader->OptionalHeader.ImageBase;
 
-	printf("EP_RAW : %x EP_RVA : %x\n", EP_RAW, RVA);
+	printf("EP_RAW : %x EP_RVA : %x\n", EP_RAW, RVA[0]);
 
 
 	startupinfo.cb = sizeof(STARTUPINFO);
 	ret = CreateProcessA(sInput, NULL, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, (LPSTARTUPINFOA)&startupinfo, &processinfo);
 	Err_Chk("CreateProcess", ret);
-	ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA, (LPCVOID)&INT3, 1, NULL);
+	ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[0], (LPCVOID)&INT3, 1, NULL);
 	Err_Chk("WriteProcessMemory", ret);
 	ret = DebugActiveProcess(processinfo.dwProcessId);
 	Err_Chk("DebugActiveProcess", ret);
@@ -123,15 +126,15 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 	{
 		if (DE.dwDebugEventCode == EXCEPTION_DEBUG_EVENT)
 		{
-			if (isBP(&DE, RVA))
+			if (isBP(&DE, RVA[0]))
 			{
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(RVA + 1), (LPVOID)&Buffer, 0x4, NULL);
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(RVA[0] + 1), (LPVOID)&Temp, 0x4, NULL);
 				Err_Chk("ReadProcessMemory", ret);
-				RVA2 = Buffer + RVA + 5;
+				RVA[1] = Temp + RVA[0] + 5;
 
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA2, (LPCVOID)&INT3, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[1], (LPCVOID)&INT3, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA, (LPCVOID)&CALL, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[0], (LPCVOID)&CALL, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
 				ctx.ContextFlags = CONTEXT_CONTROL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
@@ -141,10 +144,11 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				Err_Chk("SetThreadContext", ret);
 
 			}
-			if (isBP(&DE, RVA2))
+			else if (isBP(&DE, RVA[1]))
 			{
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(RVA2), (LPVOID)&Buffer2, 0xFFFF, NULL);
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(RVA[1]), (LPVOID)Buffer2, 0xFFFF, NULL);
 				Err_Chk("ReadProcessMemory", ret);
+
 				for (i = 0; i < 0xFFFF - sizeof(UnpackSig3); i++)
 				{
 					if (memcmp(Buffer2 + i, UnpackSig3, sizeof(UnpackSig3)) == 0)
@@ -165,17 +169,18 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 					if (memcmp(Buffer2 + i, UnpackSig2, sizeof(UnpackSig2)) == 0)
 						break;
 				}
+
 				for (i; i < 0xFFFF - sizeof(UnpackSig3); i++)
 				{
 					if (memcmp(Buffer2 + i, UnpackSig3, sizeof(UnpackSig3)) == 0)
 					{
-						RVA3 = RVA2 + i;
+						RVA[2] = RVA[1] + i;
 						break;
 					}
 				}
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA3, (LPCVOID)&INT3, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[2], (LPCVOID)&INT3, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA2, (LPCVOID)&PUSH_EBP, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[1], (LPCVOID)&PUSH_EBP, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
 				ctx.ContextFlags = CONTEXT_CONTROL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
@@ -184,17 +189,17 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				ret = SetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("SetThreadContext", ret);
 			}
-			if (isBP(&DE, RVA3))
+			else if (isBP(&DE, RVA[2]))
 			{
 				ctx.ContextFlags = CONTEXT_FULL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("GetThreadContext", ret);
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebp - 0x10), (LPVOID)&Buffer, 0x4, NULL);
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebp - 0x10), (LPVOID)&Temp, 0x4, NULL);
 				Err_Chk("ReadProcessMemory", ret);
-				RVA4 = Buffer;
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA4, (LPCVOID)&INT3, 1, NULL);
+				RVA[3] = Temp;
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[3], (LPCVOID)&INT3, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA3, (LPCVOID)&CALL2, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[2], (LPCVOID)&CALL2, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
 				ctx.ContextFlags = CONTEXT_CONTROL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
@@ -203,21 +208,21 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				ret = SetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("SetThreadContext", ret);
 			}
-			if (isBP(&DE, RVA4))
+			else if (isBP(&DE, RVA[3]))
 			{
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(RVA4), (LPVOID)&Buffer2, 0xFFFF, NULL);
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(RVA[3]), (LPVOID)Buffer2, 0xFFFF, NULL);
 				Err_Chk("ReadProcessMemory", ret);
 				for (i = 0; i < 0xFFFF - sizeof(UnpackSig4); i++)
 				{
 					if (memcmp(Buffer2 + i, UnpackSig4, sizeof(UnpackSig4)) == 0)
 					{
-						RVA5 = RVA4 + i;
+						RVA[4] = RVA[3] + i;
 						break;
 					}
 				}
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA5, (LPCVOID)&INT3, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[4], (LPCVOID)&INT3, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA4, (LPCVOID)&PUSH_EBP, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[3], (LPCVOID)&PUSH_EBP, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
 				ctx.ContextFlags = CONTEXT_CONTROL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
@@ -226,15 +231,15 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				ret = SetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("SetThreadContext", ret);
 			}
-			if (isBP(&DE, RVA5))
+			else if (isBP(&DE, RVA[4]))
 			{
 				ctx.ContextFlags = CONTEXT_FULL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("GetThreadContext", ret);
-				RVA6 = ctx.Eax;
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA6, (LPCVOID)&INT3, 1, NULL);
+				RVA[5] = ctx.Eax;
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[5], (LPCVOID)&INT3, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA5, (LPCVOID)&CALL2, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[4], (LPCVOID)&CALL2, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
 				ctx.ContextFlags = CONTEXT_CONTROL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
@@ -244,24 +249,24 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				Err_Chk("SetThreadContext", ret);
 			}
 
-			if (isBP(&DE, RVA6))
+			else if (isBP(&DE, RVA[5]))
 			{
 				ctx.ContextFlags = CONTEXT_FULL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("GetThreadContext", ret);
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Eax), (LPVOID)&Buffer3, 0x100, NULL);
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Eax), (LPVOID)Buffer3, 0x100, NULL);
 				Err_Chk("ReadProcessMemory", ret);
 				for (i = 0; i < 0x100 - sizeof(UnpackSig4); i++)
 				{
 					if (memcmp(Buffer3 + i, UnpackSig4, sizeof(UnpackSig4)) == 0)
 					{
-						RVA7 = RVA6 + i;
+						RVA[6] = RVA[5] + i;
 						break;
 					}
 				}
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA7, (LPCVOID)&INT3, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[6], (LPCVOID)&INT3, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA6, (LPCVOID)&PUSH, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[5], (LPCVOID)&PUSH, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
 				ctx.ContextFlags = CONTEXT_CONTROL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
@@ -270,17 +275,17 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				ret = SetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("SetThreadContext", ret);
 			}
-			if (isBP(&DE, RVA7))
+			else if (isBP(&DE, RVA[6]))
 			{
 				ctx.ContextFlags = CONTEXT_FULL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("GetThreadContext", ret);
-				RVA8 = ctx.Eax;
-				printf("OEP : %x\n", RVA8);
+				RVA[7] = ctx.Eax;
+				printf("OEP : %x\n", RVA[7]);
 
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA8, (LPCVOID)&INT3, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[7], (LPCVOID)&INT3, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA7, (LPCVOID)&CALL2, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[6], (LPCVOID)&CALL2, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
 				ctx.ContextFlags = CONTEXT_CONTROL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
@@ -290,11 +295,11 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				Err_Chk("SetThreadContext", ret);
 
 			}
-			if (isBP(&DE, RVA8))
+			else if (isBP(&DE, RVA[7]))
 			{
 				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)&GetProcAddress, (LPCVOID)&INT3, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA8, (LPCVOID)&PUSHAD, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)RVA[7], (LPCVOID)&PUSHAD, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
 				ctx.ContextFlags = CONTEXT_CONTROL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
@@ -302,10 +307,8 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				ctx.Eip--;
 				ret = SetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("SetThreadContext", ret);
-				//&GetProcAddress
-
 			}
-			if (isBP(&DE, (DWORD)GetProcAddress))
+			else if (isBP(&DE, (DWORD)GetProcAddress))
 			{
 				ctx.ContextFlags = CONTEXT_FULL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
@@ -314,7 +317,7 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				Err_Chk("ReadProcessMemory", ret);
 				printf("RET Addr : %x\n", RetAddr);
 
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(RetAddr), (LPVOID)&Buffer3, 0x100, NULL);
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(RetAddr), (LPVOID)Buffer3, 0x100, NULL);
 				Err_Chk("ReadProcessMemory", ret);
 
 				for (i = 0; i < 0x100 - sizeof(POPAD_Sig); i++)
@@ -342,28 +345,40 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				Err_Chk("SetThreadContext", ret);
 
 			}
-			if (isBP(&DE, JMP_RVA))
+			else if (isBP(&DE, JMP_RVA))
 			{
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)0x448000, (LPVOID)&Buffer5, 0xFFFF, NULL);
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(JMP_RVA+1), (LPVOID)&Relative_Addr, 4, NULL);
+				Err_Chk("ReadProcessMemory", ret);
+				OEP_RVA = Relative_Addr + JMP_RVA + 5;
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)OEP_RVA, (LPVOID)Buffer5, 0xFFFF, NULL);
 				Err_Chk("ReadProcessMemory", ret);
 				for (i = 0; i < 0xFFFF - 6; i++)
 				{
-					if (memcmp(Buffer5 + i, Sig1, sizeof(Sig1)) == 0)
+					if (memcmp(Buffer5 + i, ScriptSig, sizeof(ScriptSig)) == 0)
 					{
-						BP_RVA2 = 0x448000 + i;
-						ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA2, (LPCVOID)&INT3, 1, NULL);
+						AddOffset[0] = 0x30;
+						AddOffset[1] = 0x64;
+						BP_RVA[1] = OEP_RVA + i;
+						ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA[1], (LPCVOID)&INT3, 1, NULL);
 						Err_Chk("WriteProcessMemory", ret);
-						chk = TRUE;
 					}
-					if (memcmp(Buffer5 + i, Sig2, sizeof(Sig2)) == 0)
+					else if (memcmp(Buffer5 + i, LiteScriptSig, sizeof(LiteScriptSig)) == 0)
 					{
-						BP_RVA = 0x448000 + i;
-						ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA, (LPCVOID)&INT3, 1, NULL);
+						AddOffset[0] = 0x2C;
+						AddOffset[1] = 0x68;
+						BP_RVA[1] = OEP_RVA + i;
+						ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA[1], (LPCVOID)&INT3, 1, NULL);
 						Err_Chk("WriteProcessMemory", ret);
-						chk = TRUE;
+					}
+					if (memcmp(Buffer5 + i, PWSig, sizeof(PWSig)) == 0)
+					{
+						BP_RVA[0] = OEP_RVA + i;
+						ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA[0], (LPCVOID)&INT3, 1, NULL);
+						Err_Chk("WriteProcessMemory", ret);
 					}
 				}
-				if (!chk) Err_Chk("Signature Scan", ret);
+				if (BP_RVA[0] != 0 && BP_RVA[1] != 0) chk = TRUE;
+				if (!chk) Err_Chk("Signature Scan", 0);
 				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)JMP_RVA, (LPCVOID)&JMP, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
 				ctx.ContextFlags = CONTEXT_CONTROL;
@@ -374,25 +389,16 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				Err_Chk("SetThreadContext", ret);
 			}
 
-			else if (isBP(&DE, BP_RVA))
+			else if (isBP(&DE, BP_RVA[0]))
 			{
+
+				PW = (BYTE *)calloc(64 + 1, 1);
 				ctx.ContextFlags = CONTEXT_FULL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("GetThreadContext", ret);
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebx), (LPVOID)&NOW, 1, NULL);
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebx), (LPVOID)PW, 64, NULL);
 				Err_Chk("ReadProcessMemory", ret);
-				i = 0;
-				PW = (BYTE *)malloc(2);
-				PW[i] = NOW;
-				while (NOW != 0x00)
-				{
-					i++;
-					ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebx + i), (LPVOID)&NOW, 1, NULL);
-					Err_Chk("ReadProcessMemory", ret);
-					PW = (BYTE *)realloc(PW, i + 2);
-					PW[i] = NOW;
-				}
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA, (LPCVOID)&LEA, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA[0], (LPCVOID)&LEA, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
 				ctx.ContextFlags = CONTEXT_CONTROL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
@@ -401,22 +407,22 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 				ret = SetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("SetThreadContext", ret);
 			}
-			else if (isBP(&DE, BP_RVA2))
+			else if (isBP(&DE, BP_RVA[1]))
 			{
 				ctx.ContextFlags = CONTEXT_FULL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("GetThreadContext", ret);
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebp + 0x30), (LPVOID)&ScriptSize, 4, NULL);
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebp + AddOffset[0]), (LPVOID)&ScriptSize, 4, NULL);
 				Err_Chk("ReadProcessMemory", ret);
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebp + 0x64), (LPVOID)&ScriptAddress, 4, NULL);
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebp + AddOffset[1]), (LPVOID)&ScriptAddress, 4, NULL);
 				Err_Chk("ReadProcessMemory", ret);
 				printf("ScriptAddress : %X\n", ScriptAddress);
-				Buffer4 = (PBYTE)malloc(ScriptSize);
-				memset(Buffer4, 0, sizeof(Buffer4));
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)ScriptAddress, (LPVOID)Buffer4, ScriptSize, NULL);
+				RealScript = (PBYTE)malloc(ScriptSize);
+				memset(RealScript, 0, sizeof(RealScript));
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)ScriptAddress, (LPVOID)RealScript, ScriptSize, NULL);
 				Err_Chk("ReadProcessMemory", ret);
 				fp = fopen(sOutput, "wb");
-				fwrite(Buffer4, ScriptSize, 1, fp);
+				fwrite(RealScript, ScriptSize, 1, fp);
 				fclose(fp);
 				ret = DebugActiveProcessStop(processinfo.dwProcessId);
 				if (ret == 0) printf("DebugActiveProcessStop Fail!\n");
@@ -442,15 +448,16 @@ BOOL MoleBoxUnpack(char sInput[], BYTE *fs, DWORD EP_RAW, PIMAGE_NT_HEADERS pNtH
 }
 
 
-BOOL Decompile(char sInput[], char sOutput[], DWORD JMP_RVA)
+BOOL Decompile(char sInput[], char sOutput[], DWORD JMP_RVA,DWORD OEP_RVA)
 {
 	FILE *fp;
 	DWORD i, ret;
-	DWORD BP_RVA = 0, BP_RVA2 = 0, ScriptSize, ScriptAddress;
+	DWORD BP_RVA[2] = { 0, }, ScriptSize, ScriptAddress;
 	BYTE NOW = 0xFF, *PW;
-	BYTE *Buffer2;
+	BYTE *RealScript;
 	BYTE Buffer[0xFFFF + 1];
 	BOOL chk = FALSE;
+	DWORD AddOffset[2] = { 0, };
 	PROCESS_INFORMATION processinfo;
 	STARTUPINFO startupinfo;
 	DEBUG_EVENT DE;
@@ -474,30 +481,41 @@ BOOL Decompile(char sInput[], char sOutput[], DWORD JMP_RVA)
 	{
 		if (DE.dwDebugEventCode == EXCEPTION_DEBUG_EVENT)
 		{
-			if (BP_RVA == 0)
+			if (BP_RVA[0] == 0)
 			{
 				if (isBP(&DE, JMP_RVA))
 				{
-					ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)0x448000, (LPVOID)&Buffer, 0xFFFF, NULL);
+					printf("JMP_RVA : %x\n", JMP_RVA);
+					ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)OEP_RVA, (LPVOID)Buffer, 0xFFFF, NULL);
 					Err_Chk("ReadProcessMemory", ret);
 					for (i = 0; i < 0xFFFF - 6; i++)
 					{
-						if (memcmp(Buffer + i, Sig1, sizeof(Sig1)) == 0)
+						if (memcmp(Buffer + i, ScriptSig, sizeof(ScriptSig)) == 0)
 						{
-							BP_RVA2 = 0x448000 + i;
-							ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA2, (LPCVOID)&INT3, 1, NULL);
+							AddOffset[0] = 0x30;
+							AddOffset[1] = 0x64;
+							BP_RVA[1] = OEP_RVA + i;
+							ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA[1], (LPCVOID)&INT3, 1, NULL);
 							Err_Chk("WriteProcessMemory", ret);
-							chk = TRUE;
 						}
-						if (memcmp(Buffer + i, Sig2, sizeof(Sig2)) == 0)
+
+						else if (memcmp(Buffer + i, LiteScriptSig, sizeof(LiteScriptSig)) == 0)
 						{
-							BP_RVA = 0x448000 + i;
-							ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA, (LPCVOID)&INT3, 1, NULL);
+							AddOffset[0] = 0x2C;
+							AddOffset[1] = 0x68;
+							BP_RVA[1] = OEP_RVA + i;
+							ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA[1], (LPCVOID)&INT3, 1, NULL);
 							Err_Chk("WriteProcessMemory", ret);
-							chk = TRUE;
+						}
+						if (memcmp(Buffer + i, PWSig, sizeof(PWSig)) == 0)
+						{
+							BP_RVA[0] = OEP_RVA + i;
+							ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA[0], (LPCVOID)&INT3, 1, NULL);
+							Err_Chk("WriteProcessMemory", ret);
 						}
 					}
-					if (!chk) Err_Chk("Signature Scan", ret);
+					if (BP_RVA[0] != 0 && BP_RVA[1] != 0) chk = TRUE;
+					if (!chk) Err_Chk("Signature Scan", 0);
 					ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)JMP_RVA, (LPCVOID)&JMP, 1, NULL);
 					Err_Chk("WriteProcessMemory", ret);
 					ctx.ContextFlags = CONTEXT_CONTROL;
@@ -508,25 +526,15 @@ BOOL Decompile(char sInput[], char sOutput[], DWORD JMP_RVA)
 					Err_Chk("SetThreadContext", ret);
 				}
 			}
-			else if (isBP(&DE, BP_RVA))
+			else if (isBP(&DE, BP_RVA[0]))
 			{
+				PW = (BYTE *)calloc(64 + 1, 1);
 				ctx.ContextFlags = CONTEXT_FULL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("GetThreadContext", ret);
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebx), (LPVOID)&NOW, 1, NULL);
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebx), (LPVOID)PW, 64, NULL);
 				Err_Chk("ReadProcessMemory", ret);
-				i = 0;
-				PW = (BYTE *)malloc(2);
-				PW[i] = NOW;
-				while (NOW != 0x00)
-				{
-					i++;
-					ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebx + i), (LPVOID)&NOW, 1, NULL);
-					Err_Chk("ReadProcessMemory", ret);
-					PW = (BYTE *)realloc(PW, i + 2);
-					PW[i] = NOW;
-				}
-				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA, (LPCVOID)&LEA, 1, NULL);
+				ret = WriteProcessMemory(processinfo.hProcess, (LPVOID)BP_RVA[0], (LPCVOID)&LEA, 1, NULL);
 				Err_Chk("WriteProcessMemory", ret);
 				ctx.ContextFlags = CONTEXT_CONTROL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
@@ -534,23 +542,24 @@ BOOL Decompile(char sInput[], char sOutput[], DWORD JMP_RVA)
 				ctx.Eip--;
 				ret = SetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("SetThreadContext", ret);
+
 			}
-			else if (isBP(&DE, BP_RVA2))
+			else if (isBP(&DE, BP_RVA[1]))
 			{
 				ctx.ContextFlags = CONTEXT_FULL;
 				ret = GetThreadContext(processinfo.hThread, &ctx);
 				Err_Chk("GetThreadContext", ret);
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebp + 0x30), (LPVOID)&ScriptSize, 4, NULL);
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebp + AddOffset[0]), (LPVOID)&ScriptSize, 4, NULL);
 				Err_Chk("ReadProcessMemory", ret);
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebp + 0x64), (LPVOID)&ScriptAddress, 4, NULL);
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)(ctx.Ebp + AddOffset[1]), (LPVOID)&ScriptAddress, 4, NULL);
 				Err_Chk("ReadProcessMemory", ret);
 				printf("ScriptAddress : %X\n", ScriptAddress);
-				Buffer2 = (PBYTE)malloc(ScriptSize);
-				memset(Buffer2, 0, sizeof(Buffer2));
-				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)ScriptAddress, (LPVOID)Buffer2, ScriptSize, NULL);
+				RealScript = (PBYTE)malloc(ScriptSize);
+				memset(RealScript, 0, sizeof(RealScript));
+				ret = ReadProcessMemory(processinfo.hProcess, (LPCVOID)ScriptAddress, (LPVOID)RealScript, ScriptSize, NULL);
 				Err_Chk("ReadProcessMemory", ret);
 				fp = fopen(sOutput, "wb");
-				fwrite(Buffer2, ScriptSize, 1, fp);
+				fwrite(RealScript, ScriptSize, 1, fp);
 				fclose(fp);
 				ret = DebugActiveProcessStop(processinfo.dwProcessId);
 				if (ret == 0) printf("DebugActiveProcessStop Fail!\n");
@@ -600,7 +609,7 @@ int main(int argc, char* argv[])
 		if (GetOpenFileNameA(&OFN) != 0)
 		{
 			PATH = lpstrFile;
-			printf("%s\n", PATH);
+			printf("%s\n", OFN.lpstrFile);
 		}
 		else return EXIT_SUCCESS;
 	}
@@ -610,7 +619,7 @@ int main(int argc, char* argv[])
 		memset(PATH, 0, strlen(argv[1]) + 1);
 		CopyMemory(PATH, argv[1], strlen(argv[1]));
 	}
-	printf("AutohotKey B Version Decompiler v1.4 Beta!\n");
+	printf("AutohotKey B Version Decompiler v1.5 Beta!\n");
 	fp = fopen(PATH, "rb");
 	fseek(fp, 0, SEEK_END);
 	Len = ftell(fp);
@@ -698,11 +707,10 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		if (Decompile(PATH, (char *)Path, JMP_RVA)) printf("Successfully Write File.\n");
+		if (Decompile(PATH, (char *)Path, JMP_RVA, OEP_RVA)) printf("Successfully Write File.\n");
 		else printf("Fail!!\n");
 	}
 
 	system("pause");
 	return EXIT_SUCCESS;
 }
-
